@@ -1,11 +1,11 @@
-function getDAMAPI() {
+function getDAMAPI(api_url, sheet_name, xml_key, type) {
   // 各種情報定義
-  const cdmCardNo = "cdmCardNoを入力"
-  const url = "https://www.clubdam.com/app/damtomo/scoring/GetScoringAiListXML.do"
+  const cdmCardNo = "cdmNoを入力"
+  const url = api_url
 
   // シートを取得
   const ss = SpreadsheetApp.getActiveSpreadsheet()
-  const sheet = ss.getSheetByName("Records")
+  const sheet = ss.getSheetByName(sheet_name)
   let insertRow = 2
   let page = 1
 
@@ -16,21 +16,28 @@ function getDAMAPI() {
     // XMLに変換
     const xmlDocs = XmlService.parse(responce.getContentText())
     // 無名のネームスペースを取得し、採点結果のリストを取得
-    const ns = XmlService.getNamespace("", "https://www.clubdam.com/app/damtomo/scoring/GetScoringAiListXML")
+    const ns = XmlService.getNamespace("", xml_key)
     const datas = xmlDocs.getRootElement().getChild("list", ns).getChildren("data", ns)
+
+    let base = "scoring";
+    let song = "contentsName"
+    if (sheet_name == "Wao"){
+      base += "Hearts";
+      song = "songName";
+    }
 
     // データをシートに格納
     for(let i = 0; i < datas.length; i++){
-      const data = datas[i].getChild("scoring", ns)
+      const data = datas[i].getChild(base, ns)
 
       // IDが同じデータの場合処理を終了する
-      const id = data.getAttribute('scoringAiId').getValue()
+      const id = data.getAttribute('scoring' + type + 'Id').getValue()
       if (id == sheet.getRange(insertRow, 1).getValue()) return;
       sheet.insertRowBefore(insertRow)
 
       // ID,楽曲情報を挿入
       sheet.getRange(insertRow, 1).setValue(id)
-      sheet.getRange(insertRow, 2).setValue(data.getAttribute('contentsName').getValue())
+      sheet.getRange(insertRow, 2).setValue(data.getAttribute(song).getValue())
       sheet.getRange(insertRow, 3).setValue(data.getAttribute('artistName').getValue())
 
       // 得点を挿入
@@ -54,6 +61,10 @@ function getDAMAPI() {
       let formattedDate = Utilities.formatDate(date, Session.getScriptTimeZone(), "yyyy/MM/dd HH:mm");
       sheet.getRange(insertRow, 5).setValue(formattedDate)
 
+      // 集計用
+      const cell = sheet.getRange(insertRow, 6);
+      cell.setFormula("=ROUNDDOWN(INDIRECT(ADDRESS(ROW(), COLUMN()-2)), 0)");
+
       insertRow++
     }
 
@@ -62,4 +73,12 @@ function getDAMAPI() {
     if (hasNext == "0") return
     page++
   }
+}
+
+function GetAiAPI(){
+  getDAMAPI("https://www.clubdam.com/app/damtomo/scoring/GetScoringAiListXML.do", "Ai", "https://www.clubdam.com/app/damtomo/scoring/GetScoringAiListXML", "Ai");
+}
+
+function GetWaoAPI(){
+  getDAMAPI("https://www.clubdam.com/app/damtomo/scoring/GetScoringHeartsListXML.do", "Wao", "https://www.clubdam.com/app/damtomo/scoring/GetScoringHeartsListXML", "HeartsHistory");
 }
